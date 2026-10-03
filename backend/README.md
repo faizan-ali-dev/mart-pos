@@ -48,9 +48,9 @@ Admin dashboard: http://127.0.0.1:8000/admin/
 | `DJANGO_DEBUG`            | `1`                    | Set `0` in production                    |
 | `DJANGO_ALLOWED_HOSTS`    | `*`                    | Comma-separated                          |
 | `DATABASE_URL`            | `sqlite:///db.sqlite3` | Or `postgres://user:pass@host:5432/db`   |
-| `WHATSAPP_PROVIDER`       | `dummy`                | `meta` for the official Meta Cloud API   |
-| `WHATSAPP_TOKEN`          | —                      | Meta Cloud API token (provider=meta)     |
-| `WHATSAPP_PHONE_NUMBER_ID`| —                      | Meta phone number ID (provider=meta)     |
+| `WHATSAPP_PROVIDER`       | `dummy`                | Legacy fallback only — prefer per-tenant Settings |
+| `WHATSAPP_TOKEN`          | —                      | Legacy fallback Meta token (provider=meta)       |
+| `WHATSAPP_PHONE_NUMBER_ID`| —                      | Legacy fallback Meta phone number ID             |
 
 ## Key design decisions
 
@@ -65,13 +65,34 @@ Admin dashboard: http://127.0.0.1:8000/admin/
 - **Khata payments allocate FIFO** against the oldest unpaid dues; allocation detail is
   stored on the payment.
 - **WhatsApp** goes through a swappable provider interface (`notifications/providers.py`).
-  Dev default is a dummy provider that logs sends as `simulated` — no real messages leave
-  the machine without Meta credentials.
+  Each tenant configures WhatsApp in-app via `GET/PUT /api/tenants/settings/`
+  (owner only; manager read-only; cashier 403): mode `dummy` (simulated) or
+  `meta` (official Meta Cloud API), phone number ID, access token (write-only,
+  shown masked as `****`+last-4), test mode + test number, and default print
+  format (`thermal_80`/`a4`). Omitting the token on PUT keeps the stored one;
+  `meta` mode without credentials is rejected with 400. Env vars
+  (`WHATSAPP_PROVIDER/TOKEN/PHONE_NUMBER_ID`) remain only as a legacy fallback
+  when a tenant has no usable DB settings.
+- **WhatsApp test mode:** when on (default) and a test number is set,
+  `POST /api/notifications/send-test/ {to, message}` forces delivery to the
+  test number and says so in the response (`{ok, provider, to,
+  forced_to_test_number, detail, log_id}`) — a real customer can never receive
+  a test message.
+- **Phone normalization:** numbers are normalized to international digits before
+  sending — `03001234567` → `923001234567` (leading `0` → `92`; `+`/spaces/
+  dashes stripped).
+- **Meta templates:** Meta only delivers business-initiated messages as
+  pre-approved templates. Set `meta_template_name` (+ `meta_language`, default
+  `en`) on a `WhatsAppTemplate`; when the tenant's provider is Meta, sends go
+  as that template with the first 3 `template_params` as body variables
+  (`{{1}}`, `{{2}}`, `{{3}}`). Without a meta name, free text is sent
+  (works only inside Meta's 24h customer-service window).
 
 ## API overview (prefix `/api/`)
 
 - `auth/login/` (POST), `auth/me/` (GET), `auth/logout/` (POST)
-- `tenants/tenants/`, `tenants/stores/`, `tenants/users/` (+ `{id}/reset-password/`)
+- `tenants/tenants/`, `tenants/stores/`, `tenants/users/` (+ `{id}/reset-password/`),
+  `tenants/settings/` (GET/PUT — owner write, manager read, cashier 403)
 - `catalog/categories/`, `catalog/brands/`, `catalog/products/` (`?search=`, `?barcode=`)
 - `inventory/locations/`, `inventory/stock-levels/` (`?low_stock=true`),
   `inventory/purchase-orders/`, `inventory/grns/` (POST receives stock),

@@ -97,12 +97,14 @@ export function Statement({ customer, entries, shop }) {
 }
 
 /**
- * Wholesale TAX INVOICE (A4-ish). Rendered inside `.print-area`;
+ * A4 invoice (generalized). Rendered inside `.print-area`;
  * print CSS shows only that area at full width (see .invoice styles).
- * Reads applied_rate / slab_discount_percent defensively — backend may
- * or may not include them; falls back to rate + discount_amount.
+ * Props: { bill, shop, invoiceTitle } — title is "TAX INVOICE" for wholesale,
+ * "RETAIL INVOICE" for retail. Reads applied_rate / slab_discount_percent
+ * defensively — backend may or may not include them; falls back to rate +
+ * discount_amount.
  */
-export function WholesaleInvoice({ bill, shop }) {
+export function Invoice({ bill, shop, invoiceTitle }) {
   const b = bill || {};
   const lines = b.lines || b.items || [];
   const payments = b.payments || [];
@@ -129,7 +131,7 @@ export function WholesaleInvoice({ bill, shop }) {
           {shop?.address && <div>{shop.address}</div>}
           {shop?.phone && <div>📞 {shop.phone}</div>}
         </div>
-        <div className="inv-title">TAX INVOICE</div>
+        <div className="inv-title">{invoiceTitle || 'TAX INVOICE'}</div>
       </div>
 
       <div className="inv-meta">
@@ -198,4 +200,9 @@ export function WholesaleInvoice({ bill, shop }) {
       </div>
     </div>
   );
+}
+
+/** Backwards-compatible wholesale wrapper: always renders a TAX INVOICE. */
+export function WholesaleInvoice({ bill, shop }) {
+  return <Invoice bill={bill} shop={shop} invoiceTitle="TAX INVOICE" />;
 }

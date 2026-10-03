@@ -7,9 +7,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Store, Tenant, User
+from .models import Store, Tenant, TenantSettings, User
 from .permissions import RolePermission, TenantScopedMixin, UserManagementPermission
-from .serializers import StoreSerializer, TenantSerializer, UserSerializer
+from .serializers import (
+    StoreSerializer,
+    TenantSerializer,
+    TenantSettingsSerializer,
+    UserSerializer,
+)
 
 
 def _user_payload(user: User) -> dict:
@@ -139,3 +144,45 @@ def logout(request):
     """Delete the current token (log out this device)."""
     request.user.auth_token.delete()
     return Response({"detail": "Logged out."})
+
+
+class TenantSettingsView(APIView):
+    """GET/PUT /api/tenants/settings/ — per-tenant WhatsApp + print config.
+
+    Owner: read + write. Manager: read only. Cashier: 403. Superusers have no
+    tenant scope and manage settings in Django admin instead.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _settings(self, request, write=False):
+        user = request.user
+        if getattr(user, "is_superuser", False) or user.tenant_id is None:
+            return None
+        if user.role == User.ROLE_CASHIER:
+            raise PermissionDenied("Cashiers cannot access tenant settings.")
+        if write and user.role != User.ROLE_OWNER:
+            raise PermissionDenied("Only the owner can change tenant settings.")
+        settings, _ = TenantSettings.objects.get_or_create(tenant=user.tenant)
+        return settings
+
+    def get(self, request):
+        settings = self._settings(request)
+        if settings is None:
+            return Response(
+                {"detail": "Superusers manage tenant settings in Django admin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(TenantSettingsSerializer(settings).data)
+
+    def put(self, request):
+        settings = self._settings(request, write=True)
+        if settings is None:
+            return Response(
+                {"detail": "Superusers manage tenant settings in Django admin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = TenantSettingsSerializer(settings, data=request.data)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(TenantSettingsSerializer(settings).data)

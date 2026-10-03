@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, asList, fmtRs, errMsg, todayISO, modeLabel } from '../api.js';
 import { PageHead, Spinner, ErrorBox, EmptyState, Modal, Badge } from '../components/ui.jsx';
-import { Receipt, WholesaleInvoice } from '../components/Receipt.jsx';
+import { Receipt, WholesaleInvoice, Invoice } from '../components/Receipt.jsx';
+import { useAuth } from '../auth.jsx';
 import { getShopProfile } from '../offline.js';
 
 export default function Bills() {
@@ -12,6 +13,19 @@ export default function Bills() {
   const [detail, setDetail] = useState(null);
   const [printBill, setPrintBill] = useState(null);
   const shop = getShopProfile();
+  // Print format: user's last choice wins, else tenant default from settings.
+  const { tenantSettings } = useAuth();
+  const [printFormat, setPrintFormat] = useState(() => localStorage.getItem('pos_print_format') || 'thermal_80');
+  const [printFormatTouched, setPrintFormatTouched] = useState(() => !!localStorage.getItem('pos_print_format'));
+  useEffect(() => {
+    if (!printFormatTouched && tenantSettings?.default_print_format) setPrintFormat(tenantSettings.default_print_format);
+  }, [tenantSettings, printFormatTouched]);
+  const changePrintFormat = (f) => {
+    setPrintFormatTouched(true);
+    try { localStorage.setItem('pos_print_format', f); } catch { /* ignore */ }
+    setPrintFormat(f);
+  };
+  const isWholesaleBill = (b) => String(b?.sale_type || '').toLowerCase() === 'wholesale';
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -50,9 +64,13 @@ export default function Bills() {
 
   return (
     <div>
-      <PageHead title="Bills history" actions={
+      <PageHead title="Bills history" actions={<>
+        <div className="seg-toggle" title="Print format" style={{ marginBottom: 0 }}>
+          <button className={printFormat === 'thermal_80' ? 'active' : ''} onClick={() => changePrintFormat('thermal_80')}>🧾 80mm</button>
+          <button className={printFormat === 'a4' ? 'active' : ''} onClick={() => changePrintFormat('a4')}>📄 A4</button>
+        </div>
         <input type="date" className="input" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
-      } />
+      </>} />
       <ErrorBox error={error} onRetry={load} />
       {loading ? <Spinner label="Bills load ho rahe hain…" /> : bills.length === 0 ? (
         <EmptyState title="Koi bill nahi" hint="Is date ko koi sale record nahi mili." />
@@ -108,7 +126,12 @@ export default function Bills() {
 
       {printBill && (
         <div className="print-area">
-          {String(printBill.sale_type || '').toLowerCase() === 'wholesale'
+          {printFormat === 'a4' ? (
+            <Invoice
+              bill={printBill} shop={shop}
+              invoiceTitle={isWholesaleBill(printBill) ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+            />
+          ) : isWholesaleBill(printBill)
             ? <WholesaleInvoice bill={printBill} shop={shop} />
             : <Receipt bill={printBill} shop={shop} />}
         </div>

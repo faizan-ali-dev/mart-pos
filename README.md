@@ -43,6 +43,8 @@ Login with a demo user above. Open a **shift** first (Shifts page) — billing r
 - **Khata** — customer & supplier ledgers, credit sales, FIFO payment allocation, credit limits, aging report (30/60/90+), printable statements
 - **Wholesale** — customer types (retail/wholesale), wholesale pricing, volume discount slabs, wholesale billing mode, TAX INVOICE print with amount-in-words, wholesale reports & dashboard split
 - **Growth** — kharcha/expense tracking, cash payouts from counter, promotion engine (BOGO, bundles, scheduled offers), filtered sales/purchase/profit reports with CSV/Excel export, weighing-scale weight input (Web Serial)
+- **WhatsApp in-app config** — per-tenant settings UI (test/live mode, credentials, test number), provider reads DB, Meta template support, PK phone auto-format
+- **Invoice printing** — A4 invoice (retail + wholesale) alongside 80mm thermal, per-tenant default + per-bill toggle
 - **Users** — owner/manager manage users per tenant: roles, activate/deactivate, password reset (Settings → Users, plus Django admin)
 - **Dashboard** — today's sales, payment-mode split, top items, alerts
 - **WhatsApp** — receipt, khata payment, overdue reminder, low-stock & day-close summaries (simulated in dev; plug Meta Cloud API via env, see backend/README.md)
@@ -56,7 +58,7 @@ Login with a demo user above. Open a **shift** first (Shifts page) — billing r
 
 ## Verified
 
-- Backend: 120 automated tests green (`manage.py test`) — billing totals, stock deduction, GRN average cost, khata FIFO, shift reconciliation, tenant isolation, user permissions, wholesale pricing/slabs, promotions, payouts, expenses, report exports.
+- Backend: 140 automated tests green (`manage.py test`) — billing totals, stock deduction, GRN average cost, khata FIFO, shift reconciliation, tenant isolation, user permissions, wholesale pricing/slabs, promotions, payouts, expenses, report exports, tenant settings & WhatsApp config.
 - Frontend: `npm run build` passes; PWA manifest + service worker generated.
 - Live smoke test: login → open shift → create bill (totals/change/stock deduction verified via API).
 

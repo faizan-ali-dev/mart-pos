@@ -56,7 +56,7 @@ The UI is written defensively (DRF pagination `{results:[...]}` or plain arrays,
 | `/promotions` | **Promotions** (owner/manager only) — BOGO, bundle, % / flat bill discounts with scheduling (dates, weekdays, time range), active toggle |
 | `/reports` | **Reports** (owner/manager only) — Sales / Purchases / Profit tabs, filters, **CSV + Excel export** |
 | `/users` | User management — roles (owner/manager/cashier), activate/deactivate, reset password. Hidden from cashiers (friendly 403) |
-| `/settings` | Shop profile, WhatsApp rules/templates/test, offline queue & cache |
+| `/settings` | Shop profile, **WhatsApp connection (mode/token/test) + rules/templates/test**, **Printing (default print format)**, offline queue & cache |
 
 ## Offline behavior (basic, real)
 
@@ -69,7 +69,25 @@ The UI is written defensively (DRF pagination `{results:[...]}` or plain arrays,
 
 ## Printing
 
-Receipts render inside a `.print-area` div; `@media print` CSS shows only that area at **80mm thermal width** (shop header, items, totals, payment modes, khata balance, Urdu+English footer). Khata statements print in a wider A4-ish layout. **Wholesale bills print as a TAX INVOICE** (A4-ish): invoice header, bill-to block, item table with rate/qty/discount/amount, totals, amount-in-words (Pakistani numbering — crore/lakh), signature lines. Use the browser print dialog → thermal printer (retail) or regular printer (wholesale invoice).
+Receipts render inside a `.print-area` div; `@media print` CSS shows only that area. Two formats, switchable per bill via the 🧾 80mm / 📄 A4 toggle on the Billing and Bills pages (the toggle remembers the cashier's last choice; the tenant default comes from **Settings → Printing**):
+
+- **80mm thermal receipt** — shop header, items, totals, payment modes, khata balance, Urdu+English footer. Use the browser print dialog → thermal printer.
+- **A4 invoice** — full-width layout: invoice header, bill-to block, item table with rate/qty/discount/amount, totals, amount-in-words (Pakistani numbering — crore/lakh), signature lines. Wholesale bills print as **TAX INVOICE**, retail bills as **RETAIL INVOICE**. Use a regular printer.
+
+Khata statements also print in a wider A4-ish layout.
+
+## WhatsApp setup (in-app, no code changes)
+
+**Settings → WhatsApp → WhatsApp connection** (owner only; managers see read-only):
+
+1. **Mode** — *Testing (simulated)*: sends are logged, no real message leaves the machine. *Live — Meta Cloud API*: real WhatsApp messages.
+2. **Live mode needs**: *Phone Number ID* and *Access Token* from **developers.facebook.com** → your app → **WhatsApp → API Setup**. The token field shows a masked value (`••••abcd`) once saved; leave it empty to keep the existing token, or press *Change* to enter a new one.
+3. **Test mode** (recommended ON while trying): every message is forced to the *Test phone number* so no real customer gets a test message.
+4. **Send test message** — shows which provider was actually used and the real recipient.
+
+All values are stored server-side per tenant (`GET/PUT /api/tenants/settings/`), so after deploy each mart owner just fills them in here. If the backend settings endpoint isn't deployed yet, values fall back to browser-local storage with a warning.
+
+**Meta notes:** business-initiated messages (e.g. khata reminders) require **Meta-approved message templates** — plain text only works inside the 24-hour customer-service window after the customer's last message. Keep template names in **Settings → WhatsApp → Templates** in sync with what Meta approved.
 
 ## Roles
 

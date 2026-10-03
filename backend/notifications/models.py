@@ -19,6 +19,17 @@ class WhatsAppTemplate(models.Model):
     name = models.CharField(max_length=100, help_text="e.g. bill_receipt")
     language = models.CharField(max_length=5, choices=LANG_CHOICES, default=LANG_EN)
     body = models.TextField(help_text="Use {placeholders}, e.g. {bill_no}, {total}")
+    meta_template_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Approved Meta template name, e.g. bill_receipt. When set and the "
+        "tenant uses the Meta provider, sends go as this template instead of free text.",
+    )
+    meta_language = models.CharField(
+        max_length=10,
+        default="en",
+        help_text="Meta template language code, e.g. en, ur.",
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:

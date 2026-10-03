@@ -6,7 +6,16 @@ from .models import MessageLog, NotificationRule, WhatsAppTemplate
 class WhatsAppTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WhatsAppTemplate
-        fields = ("id", "tenant", "name", "language", "body", "is_active")
+        fields = (
+            "id",
+            "tenant",
+            "name",
+            "language",
+            "body",
+            "meta_template_name",
+            "meta_language",
+            "is_active",
+        )
         read_only_fields = ("id",)
 
 

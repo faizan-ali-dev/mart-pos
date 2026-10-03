@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { api, asList, fmtRs, errMsg, isNetworkError, modeLabel } from '../api.js';
 import { Modal, Field, Spinner, ErrorBox, EmptyState, Badge, PageHead } from '../components/ui.jsx';
-import { Receipt, WholesaleInvoice } from '../components/Receipt.jsx';
+import { Receipt, WholesaleInvoice, Invoice } from '../components/Receipt.jsx';
+import { useAuth } from '../auth.jsx';
 import { getShopProfile, getCachedProducts, getCachedCustomers, setCachedProducts, setCachedCustomers, queueBill, queueCount } from '../offline.js';
 
 const pName = (p) => p?.name || p?.product_name || 'Item';
@@ -52,6 +53,19 @@ export default function Billing() {
   const [printBill, setPrintBill] = useState(null);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Print format: cashier's last choice wins, else tenant default from settings.
+  const { tenantSettings } = useAuth();
+  const [printFormat, setPrintFormat] = useState(() => localStorage.getItem('pos_print_format') || 'thermal_80');
+  const [printFormatTouched, setPrintFormatTouched] = useState(() => !!localStorage.getItem('pos_print_format'));
+  useEffect(() => {
+    if (!printFormatTouched && tenantSettings?.default_print_format) setPrintFormat(tenantSettings.default_print_format);
+  }, [tenantSettings, printFormatTouched]);
+  const changePrintFormat = (f) => {
+    setPrintFormatTouched(true);
+    try { localStorage.setItem('pos_print_format', f); } catch { /* ignore */ }
+    setPrintFormat(f);
+  };
+  const isWholesaleBill = (b) => String(b?.sale_type || '').toLowerCase() === 'wholesale';
   const [saleType, setSaleType] = useState('retail');   // 'retail' | 'wholesale'
   const [slabs, setSlabs] = useState(null);             // {productId: [{min_qty, discount_percent}]}
   const [scaleReading, setScaleReading] = useState(null); // cart line key currently reading from scale
@@ -365,6 +379,10 @@ export default function Billing() {
         title="Billing" urdu="بلنگ"
         actions={<>
           <span className="kbd-hint">F2 search · F9 hold · F10 pay · Esc clear</span>
+          <div className="seg-toggle" title="Print format" style={{ marginBottom: 0 }}>
+            <button className={printFormat === 'thermal_80' ? 'active' : ''} onClick={() => changePrintFormat('thermal_80')}>🧾 80mm</button>
+            <button className={printFormat === 'a4' ? 'active' : ''} onClick={() => changePrintFormat('a4')}>📄 A4</button>
+          </div>
           <button className="btn" onClick={() => { setShowParked(true); loadParked(); }}>
             Parked ({parked.length})
           </button>
@@ -588,7 +606,12 @@ export default function Billing() {
 
       {printBill && (
         <div className="print-area">
-          {(printBill.sale_type === 'wholesale') ? (
+          {printFormat === 'a4' ? (
+            <Invoice
+              bill={printBill} shop={shop}
+              invoiceTitle={isWholesaleBill(printBill) ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+            />
+          ) : isWholesaleBill(printBill) ? (
             <WholesaleInvoice bill={printBill} shop={shop} />
           ) : (
             <Receipt bill={printBill} shop={shop} />

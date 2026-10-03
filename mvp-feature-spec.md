@@ -150,6 +150,16 @@ Fields: SKU/barcode (auto-generate internal SKU if none), name (EN + Urdu), cate
 - **Reports with filters + export:** sales report (date, search, category, sale_type, payment mode), purchase report (date, supplier, search), profit report (sales, COGS estimate, gross, expenses, payouts, net profit). CSV + Excel (xlsx) download via `?export=csv|xlsx`.
 - **Weighing scale:** billing supports kg/litre items with a "read scale" button (Web Serial API, Chrome/Edge) + manual weight fallback. Needs a serial/USB scale on the billing PC.
 
+---
+
+## Module 7 — WhatsApp in-app config + A4 invoice (built 2026-10-03)
+
+- **Tenant settings (no code/env changes):** WhatsApp mode (simulated/live), Phone Number ID, access token (stored masked, never returned in full; omitted on save = keep existing), test mode + test number — all from Settings UI, per tenant, owner-only.
+- **Provider reads DB:** Meta Cloud API credentials come from tenant settings (env vars kept as fallback). Test mode forces every send-test to the test number so real customers never get test messages.
+- **Template support:** WhatsAppTemplate carries Meta template name + language; business-initiated sends use approved templates, otherwise plain text (24h window).
+- **Phone normalization:** Pakistani numbers auto-formatted to international (0300... → 923...).
+- **A4 invoice printing:** print-format setting (80mm thermal / A4, per-tenant default + per-bill toggle). Retail bills print "RETAIL INVOICE", wholesale "TAX INVOICE" — both with bill-to block, items, amount-in-words, signatures.
+
 ## Out of scope — Phase 2 (remaining)
 Multi-branch support · employee attendance/payroll · supplier auto-reorder · loyalty points · full Dexie offline sync · e-commerce integration.
 

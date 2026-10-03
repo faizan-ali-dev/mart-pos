@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import Store, Tenant, User
+from .models import Store, Tenant, TenantSettings, User
 
 
 class TenantScopedAdmin(admin.ModelAdmin):
@@ -28,6 +28,19 @@ class TenantAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "phone", "block_khata_over_limit", "created_at")
     search_fields = ("name", "code")
     readonly_fields = ("bill_seq",)
+
+
+@admin.register(TenantSettings)
+class TenantSettingsAdmin(TenantScopedAdmin):
+    list_display = (
+        "tenant",
+        "whatsapp_mode",
+        "whatsapp_test_mode",
+        "default_print_format",
+        "updated_at",
+    )
+    list_filter = ("whatsapp_mode", "whatsapp_test_mode")
+    # The access token is staff-visible here; the API never returns it in full.
 
 
 @admin.register(Store)
