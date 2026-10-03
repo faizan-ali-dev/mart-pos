@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { api, asList, fmtRs, errMsg, isNetworkError, modeLabel } from '../api.js';
 import { Modal, Field, Spinner, ErrorBox, EmptyState, Badge, PageHead } from '../components/ui.jsx';
-import { Receipt, WholesaleInvoice, Invoice } from '../components/Receipt.jsx';
+import { Receipt, Invoice } from '../components/Receipt.jsx';
 import { useAuth } from '../auth.jsx';
 import { getShopProfile, getCachedProducts, getCachedCustomers, setCachedProducts, setCachedCustomers, queueBill, queueCount } from '../offline.js';
 
@@ -611,8 +611,6 @@ export default function Billing() {
               bill={printBill} shop={shop}
               invoiceTitle={isWholesaleBill(printBill) ? 'TAX INVOICE' : 'RETAIL INVOICE'}
             />
-          ) : isWholesaleBill(printBill) ? (
-            <WholesaleInvoice bill={printBill} shop={shop} />
           ) : (
             <Receipt bill={printBill} shop={shop} />
           )}

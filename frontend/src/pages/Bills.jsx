@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, asList, fmtRs, errMsg, todayISO, modeLabel } from '../api.js';
 import { PageHead, Spinner, ErrorBox, EmptyState, Modal, Badge } from '../components/ui.jsx';
-import { Receipt, WholesaleInvoice, Invoice } from '../components/Receipt.jsx';
+import { Receipt, Invoice } from '../components/Receipt.jsx';
 import { useAuth } from '../auth.jsx';
 import { getShopProfile } from '../offline.js';
 
@@ -131,9 +131,7 @@ export default function Bills() {
               bill={printBill} shop={shop}
               invoiceTitle={isWholesaleBill(printBill) ? 'TAX INVOICE' : 'RETAIL INVOICE'}
             />
-          ) : isWholesaleBill(printBill)
-            ? <WholesaleInvoice bill={printBill} shop={shop} />
-            : <Receipt bill={printBill} shop={shop} />}
+          ) : <Receipt bill={printBill} shop={shop} />}
         </div>
       )}
     </div>
