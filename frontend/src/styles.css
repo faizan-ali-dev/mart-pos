@@ -294,3 +294,29 @@ a { color: var(--primary); }
 .split-fill { height: 100%; border-radius: 6px; }
 .split-fill.r { background: #16a34a; }
 .split-fill.w { background: #7c3aed; }
+
+/* ---------- net profit hero (dashboard + reports) ---------- */
+.hero-profit { background: linear-gradient(135deg, #0f766e 0%, #115e59 100%); color: #fff; margin-bottom: 14px; border: none; }
+.hero-profit .hero-label { font-size: 14px; opacity: 0.9; }
+.hero-profit .hero-label .dim { color: #cbd5e1; }
+.hero-profit .urdu-sub { color: #fde68a; }
+.hero-value { font-size: 34px; font-weight: 800; margin: 4px 0; }
+.hero-value.t-green { color: #a7f3d0; }
+.hero-value.t-red { color: #fca5a5; }
+.hero-break { font-size: 13px; opacity: 0.85; }
+
+/* ---------- promotions ---------- */
+.promo-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
+.r-free { display: inline-block; background: #16a34a; color: #fff; font-size: 10px; font-weight: 800; border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+.day-checks { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.check.pill { border: 1px solid #cbd5e1; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.check.pill.on { background: #dcfce7; border-color: #16a34a; }
+.check.pill input { margin-right: 4px; }
+
+/* ---------- reports ---------- */
+.toolbar.wrap { flex-wrap: wrap; row-gap: 8px; }
+.rep-total { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+
+/* ---------- misc ---------- */
+.sub-h { margin: 12px 0 6px; font-size: 14px; }
+.qty-ctl .btn { flex: 0 0 auto; }

@@ -84,6 +84,14 @@ Admin dashboard: http://127.0.0.1:8000/admin/
   `notifications/send-test/` (POST)
 - `reports/daily-summary/` (`?date=`)
 - `catalog/price-slabs/` (CRUD, `?product=`), `reports/wholesale-summary/` (`?date=`, `?customer=`)
+- `expenses/categories/` (CRUD), `expenses/expenses/` (CRUD, `?from=&to=&category=`),
+  `expenses/summary/` (`?from=&to=` → `{total, by_category[]}`)
+- `promotions/promotions/` (CRUD, `?promo_type=`, `?is_active=`)
+- `billing/payouts/` (GET, POST — auto-attaches to your open shift)
+- `reports/sales/` (`?from=&to=&search=&category=&sale_type=&payment_mode=&export=`),
+  `reports/purchases/` (`?from=&to=&supplier=&search=&export=`),
+  `reports/profit/` (`?from=&to=`), `reports/daily-summary/` (now incl.
+  `expenses_total`, `payouts_total`, `net_profit`)
 
 ### Wholesale pricing
 
@@ -120,6 +128,65 @@ wholesale prices and volume slabs on 5 demo products (e.g. Dalda Cooking Oil:
 total_sales, by_customer[], top_items[], margin_estimate}`. `margin_estimate` allocates
 the bill-level discount to lines proportionally and uses the current weighted-average
 `purchase_price`, so treat it as an estimate.
+
+### Promotion engine
+
+`POST /api/promotions/promotions/` (owner/manager). Types: `bogo` (buy X get Y
+free), `bundle` (discount % on two products bought together), `percent` / `flat`
+(bill-level). Scheduling: `start_date`/`end_date`, `days_of_week` (0=Monday..6=Sunday,
+empty = every day), `time_start`/`time_end`. Only promotions live *right now* apply.
+
+Evaluated inside the atomic bill transaction:
+
+1. **bogo:** for every `buy_qty` of `buy_product` in the cart → `get_qty` of
+   `get_product` added as a FREE line (`is_free=true`, rate 0). Stock is still
+   deducted; the free grant is capped at available stock ("while stocks last").
+2. **bundle:** cart must contain `buy_qty` of `buy_product` AND `get_qty` of
+   `get_product` → `discount_percent` off those lines. Promo vs existing
+   (slab/manual) line discount: **larger wins, never stacked**.
+3. **percent/flat:** applies when subtotal >= `min_bill_amount`. Only the **best**
+   bill-level promo applies. It stacks additively with manual + wholesale
+   auto-discounts, still **capped at 50%** of subtotal in total.
+
+The bill response carries `applied_promotions: [{id, name, type, description}]`
+(also stored on the bill for receipts/reprints).
+
+### Expenses (kharcha)
+
+`expenses/categories/` + `expenses/expenses/` (owner/manager). Track rent, bijli,
+salaries… per day with payment mode and notes. `expenses/summary/?from=&to=`
+gives `{total, by_category[]}`. Expenses feed the profit report and the
+daily-summary's `net_profit`.
+
+### Cash payouts
+
+`POST /api/billing/payouts/` `{amount, purpose: supplier_payment|expense|other,
+supplier?, notes?}` — cash out of the drawer, auto-attached to your open shift
+(400 when there is none). `supplier_payment` also records a khata payment
+against the supplier (FIFO, cannot exceed the payable). Payouts reduce the
+shift's `expected_cash`: opening + cash sales − cash refunds − payouts.
+
+### Filtered reports + CSV/Excel export
+
+- `GET /api/reports/sales/` — line-level sales with `?from=&to=&search=`
+  (bill no / product / SKU) `&category=&sale_type=&payment_mode=`.
+- `GET /api/reports/purchases/` — GRN lines with `?from=&to=&supplier=&search=`.
+- Both paginate as JSON by default; add `?export=csv` or `?export=xlsx` for a
+  file download of **all** filtered rows (`Content-Disposition: attachment`).
+  (Named `export`, not `format`: DRF reserves `?format=` for content negotiation.)
+- `GET /api/reports/profit/?from=&to=` → `{sales_total, returns_total,
+  net_sales, cogs_estimate, gross_profit, expenses_total, payouts_total,
+  net_profit}`. `cogs_estimate` uses each product's *current* weighted-average
+  cost (an estimate; free bogo lines count as cost too).
+
+Seed growth-module demo data (idempotent, needs `seed_demo` first):
+
+```bash
+.venv/bin/python manage.py seed_growth
+```
+
+Creates a bogo promo (buy 2 cooking oil → 1 salt free), a weekend 5%-over-2000
+promo, expense categories + 3 sample expenses, and 1 sample payout.
 
 ### Bill create payload
 

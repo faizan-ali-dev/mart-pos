@@ -140,6 +140,16 @@ Fields: SKU/barcode (auto-generate internal SKU if none), name (EN + Urdu), cate
 - **Wholesale invoice:** TAX INVOICE print format with bill-to block, item table, amount-in-words (lakh/crore), signature lines.
 - **Reports:** wholesale summary (totals, by-customer, top items, margin estimate), retail-vs-wholesale split on dashboard.
 
+---
+
+## Module 6 — Growth features (built 2026-10-03)
+
+- **Kharcha tracking:** expense categories + expenses (date, amount, payment mode, notes); summary by category; feeds net-profit calculation.
+- **Cash payouts:** record payouts from the counter (supplier payment / expense / other) against the open shift; supplier payouts auto-create khata payments (FIFO); shift close deducts payouts from expected cash.
+- **Promotion engine:** buy-1-get-1 (free lines, stock deducted), bundle discounts, bill-level % / flat promos with min-bill, scheduling (dates, weekdays, time windows). Best bill-level promo wins; 50% total discount cap preserved. Applied promos stored on the bill + shown on receipts (FREE badge).
+- **Reports with filters + export:** sales report (date, search, category, sale_type, payment mode), purchase report (date, supplier, search), profit report (sales, COGS estimate, gross, expenses, payouts, net profit). CSV + Excel (xlsx) download via `?export=csv|xlsx`.
+- **Weighing scale:** billing supports kg/litre items with a "read scale" button (Web Serial API, Chrome/Edge) + manual weight fallback. Needs a serial/USB scale on the billing PC.
+
 ## Out of scope — Phase 2 (remaining)
 Multi-branch support · employee attendance/payroll · supplier auto-reorder · loyalty points · full Dexie offline sync · e-commerce integration.
 

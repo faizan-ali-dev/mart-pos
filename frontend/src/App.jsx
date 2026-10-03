@@ -11,6 +11,9 @@ import Inventory from './pages/Inventory.jsx';
 import Khata from './pages/Khata.jsx';
 import Wholesale from './pages/Wholesale.jsx';
 import Shifts from './pages/Shifts.jsx';
+import Expenses from './pages/Expenses.jsx';
+import Promotions from './pages/Promotions.jsx';
+import Reports from './pages/Reports.jsx';
 import Users from './pages/Users.jsx';
 import Settings from './pages/Settings.jsx';
 import { Spinner } from './components/ui.jsx';
@@ -71,6 +74,9 @@ export default function App() {
         <Route path="khata" element={<Khata />} />
         <Route path="wholesale" element={<ManageOnly><Wholesale /></ManageOnly>} />
         <Route path="shifts" element={<Shifts />} />
+        <Route path="expenses" element={<ManageOnly><Expenses /></ManageOnly>} />
+        <Route path="promotions" element={<ManageOnly><Promotions /></ManageOnly>} />
+        <Route path="reports" element={<ManageOnly><Reports /></ManageOnly>} />
         <Route path="users" element={<ManageOnly><Users /></ManageOnly>} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

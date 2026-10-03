@@ -8,17 +8,19 @@ from rest_framework.response import Response
 
 from tenants.permissions import RolePermission, TenantScopedMixin
 
-from .models import Bill, ParkedBill, Return, Shift
+from .models import Bill, ParkedBill, Payout, Return, Shift
 from .serializers import (
     BillCreateSerializer,
     BillSerializer,
     ParkedBillSerializer,
+    PayoutCreateSerializer,
+    PayoutSerializer,
     ReturnCreateSerializer,
     ReturnSerializer,
     ShiftCloseSerializer,
     ShiftSerializer,
 )
-from .services import close_shift, create_bill, create_return
+from .services import close_shift, create_bill, create_payout, create_return
 
 
 class ShiftViewSet(TenantScopedMixin, viewsets.ModelViewSet):
@@ -185,3 +187,44 @@ class ReturnViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ReturnSerializer(ret).data, status=status.HTTP_201_CREATED)
+
+
+class PayoutViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+    """
+    Cash payouts from the counter drawer. POST auto-attaches to the user's
+    open shift (400 when there is none). supplier_payment also records a
+    khata payment against the supplier (FIFO).
+    """
+
+    queryset = Payout.objects.select_related("supplier", "created_by", "shift").all()
+    serializer_class = PayoutSerializer
+    permission_classes = [IsAuthenticated, RolePermission]
+    allowed_roles = ("owner", "manager", "cashier")
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        purpose = self.request.query_params.get("purpose")
+        if purpose:
+            qs = qs.filter(purpose=purpose)
+        date = self.request.query_params.get("date")
+        if date:
+            qs = qs.filter(created_at__date=date)
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        ser = PayoutCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        try:
+            payout = create_payout(
+                tenant=request.user.tenant,
+                user=request.user,
+                amount=data["amount"],
+                purpose=data["purpose"],
+                supplier=data.get("supplier"),
+                notes=data.get("notes", ""),
+            )
+        except ValidationError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(PayoutSerializer(payout).data, status=status.HTTP_201_CREATED)

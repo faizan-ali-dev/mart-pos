@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     "khata",
     "notifications",
     "reports",
+    "expenses",
+    "promotions",
 ]
 
 MIDDLEWARE = [

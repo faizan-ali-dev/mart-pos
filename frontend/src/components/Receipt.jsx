@@ -32,7 +32,7 @@ export function Receipt({ bill, shop }) {
       <div className="r-sep" />
       {lines.map((l, i) => (
         <div key={i} className="r-item">
-          <div className="r-row"><span>{lineName(l)}</span><span>{fmtRs(lineTotal(l))}</span></div>
+          <div className="r-row"><span>{lineName(l)} {l.is_free ? <span className="r-free">FREE 🎁</span> : null}</span><span>{fmtRs(lineTotal(l))}</span></div>
           <div className="r-row r-dim"><span>{lineQty(l)} × {fmtRs(lineRate(l))}{lineDisc(l) > 0 ? `  (−${fmtRs(lineDisc(l))})` : ''}</span></div>
         </div>
       ))}
@@ -156,7 +156,7 @@ export function WholesaleInvoice({ bill, shop }) {
           {lines.map((l, i) => (
             <tr key={i}>
               <td>{i + 1}</td>
-              <td>{lineName(l)}</td>
+              <td>{lineName(l)} {l.is_free ? <span className="r-free">FREE 🎁</span> : null}</td>
               <td>{lineQty(l)}</td>
               <td>{fmtRs(lineRate(l))}</td>
               <td>

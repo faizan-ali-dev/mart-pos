@@ -17,11 +17,17 @@ from django.utils import timezone
 
 from catalog.models import PriceSlab, Product
 from inventory.services import add_stock, deduct_stock
-from khata.models import Customer
-from khata.services import adjust_balance, party_balance, record_receivable
+from khata.models import Customer, KhataPayment, Supplier
+from khata.services import (
+    adjust_balance,
+    party_balance,
+    record_khata_payment,
+    record_receivable,
+)
+from promotions.services import apply_line_promotions, best_bill_promotion
 from tenants.models import Tenant
 
-from .models import Bill, BillLine, Payment, Return, ReturnLine, Shift
+from .models import Bill, BillLine, Payment, Payout, Return, ReturnLine, Shift
 
 
 def _q2(value) -> Decimal:
@@ -180,6 +186,43 @@ def create_bill(
                 "discount_amount": discount,
                 "slab_discount_percent": slab_pct,
                 "line_total": line_total,
+                "is_free": False,
+            }
+        )
+
+    # --- promotions: bundle discounts rewrite line totals, bogo adds free lines ---
+    now = timezone.now()
+    computed_lines, free_items, applied_promos = apply_line_promotions(
+        tenant, computed_lines, now
+    )
+    subtotal = Decimal("0")
+    tax_total = Decimal("0")
+    for cl in computed_lines:
+        subtotal += cl["line_total"]
+        tax_total += _q2(cl["line_total"] * cl["product"].tax_percent / 100)
+    for fi in free_items:
+        computed_lines.append(
+            {
+                "product": fi["product"],
+                "qty": fi["qty"],
+                "rate": Decimal("0"),
+                "discount_percent": Decimal("0"),
+                "discount_amount": Decimal("0"),
+                "slab_discount_percent": Decimal("0"),
+                "line_total": Decimal("0"),
+                "is_free": True,
+            }
+        )
+
+    # --- bill-level promotion: only the BEST percent/flat promo applies ---
+    promo, promo_amt, promo_desc = best_bill_promotion(tenant, subtotal, now)
+    if promo is not None:
+        applied_promos.append(
+            {
+                "id": promo.id,
+                "name": promo.name,
+                "type": promo.promo_type,
+                "description": promo_desc,
             }
         )
 
@@ -191,14 +234,17 @@ def create_bill(
         if is_wholesale and customer is not None
         else Decimal("0")
     )
-    if auto_pct:
+    if auto_pct or promo_amt:
         if bill_discount_percent:
             manual_pct_equiv = bill_discount_percent
         elif bill_discount_amount and subtotal:
             manual_pct_equiv = _q2(bill_discount_amount * 100 / subtotal)
         else:
             manual_pct_equiv = Decimal("0")
-        total_pct = min(manual_pct_equiv + auto_pct, Decimal("50"))
+        promo_pct_equiv = (
+            _q2(promo_amt * 100 / subtotal) if promo_amt and subtotal else Decimal("0")
+        )
+        total_pct = min(manual_pct_equiv + auto_pct + promo_pct_equiv, Decimal("50"))
         bill_discount = _q2(subtotal * total_pct / 100)
     else:
         bill_discount = (
@@ -210,6 +256,13 @@ def create_bill(
         raise ValidationError("Bill discount exceeds subtotal.")
     if auto_pct and not bill_discount_reason:
         bill_discount_reason = f"Wholesale customer discount ({auto_pct}%)"
+    if promo_amt and promo is not None:
+        promo_note = f"Promo: {promo.name}"
+        bill_discount_reason = (
+            f"{bill_discount_reason}; {promo_note}"
+            if bill_discount_reason
+            else promo_note
+        )
     grand_total = _q2(subtotal - bill_discount + tax_total)
 
     # --- payments ---
@@ -269,6 +322,7 @@ def create_bill(
         tendered=tendered,
         change_due=change_due,
         notes=notes,
+        applied_promotions=applied_promos,
     )
     for cl in computed_lines:
         BillLine.objects.create(bill=bill, **cl)
@@ -370,8 +424,63 @@ def create_return(*, tenant, bill, lines: list, reason: str,
 
 
 @transaction.atomic
+def create_payout(*, tenant, user, amount, purpose, supplier=None, notes="") -> Payout:
+    """
+    Cash out of the counter drawer (supplier payment, shop expense, ...).
+    Auto-attaches to the user's open shift; the payout reduces that shift's
+    expected_cash at close.
+
+    purpose="supplier_payment" also records a khata payment against the
+    supplier (FIFO allocation, cannot exceed the outstanding payable).
+    """
+    if user.tenant_id != tenant.id:
+        raise ValidationError("User does not belong to this tenant.")
+    amount = _q2(amount)
+    if amount <= 0:
+        raise ValidationError("Payout amount must be positive.")
+    if purpose not in dict(Payout.PURPOSE_CHOICES):
+        raise ValidationError(f"Invalid payout purpose: {purpose}.")
+
+    shift = _open_shift_for(tenant, user)
+    if shift is None:
+        raise ValidationError("No open shift. Open a shift before recording a payout.")
+
+    if purpose == Payout.PURPOSE_SUPPLIER_PAYMENT:
+        if supplier is None:
+            raise ValidationError("A supplier is required for supplier payments.")
+        if not isinstance(supplier, Supplier):
+            try:
+                supplier = Supplier.objects.get(pk=supplier, tenant=tenant)
+            except Supplier.DoesNotExist:
+                raise ValidationError("Supplier not found.")
+        if supplier.tenant_id != tenant.id:
+            raise ValidationError("Supplier does not belong to this tenant.")
+        record_khata_payment(
+            tenant=tenant,
+            supplier=supplier,
+            amount=amount,
+            mode=KhataPayment.MODE_CASH,
+            reference="Counter payout",
+            created_by=user,
+        )
+
+    return Payout.objects.create(
+        tenant=tenant,
+        shift=shift,
+        amount=amount,
+        purpose=purpose,
+        supplier=supplier if purpose == Payout.PURPOSE_SUPPLIER_PAYMENT else None,
+        notes=notes,
+        created_by=user,
+    )
+
+
+@transaction.atomic
 def close_shift(*, shift: Shift, counted_cash, notes="", closed_by=None) -> Shift:
-    """Close a shift: expected = opening + cash sales - cash refunds; diff = counted - expected."""
+    """
+    Close a shift: expected = opening + cash sales - cash refunds - payouts;
+    diff = counted - expected.
+    """
     if shift.status != Shift.STATUS_OPEN:
         raise ValidationError("Shift is already closed.")
     counted_cash = _q2(counted_cash)
@@ -388,7 +497,11 @@ def close_shift(*, shift: Shift, counted_cash, notes="", closed_by=None) -> Shif
         ).aggregate(t=Sum("total_refund"))["t"]
         or Decimal("0")
     )
-    expected = _q2(shift.opening_cash + cash_sales - cash_refunds)
+    payouts_total = (
+        Payout.objects.filter(shift=shift).aggregate(t=Sum("amount"))["t"]
+        or Decimal("0")
+    )
+    expected = _q2(shift.opening_cash + cash_sales - cash_refunds - payouts_total)
 
     shift.expected_cash = expected
     shift.counted_cash = counted_cash
@@ -421,6 +534,22 @@ def day_summary(tenant, target_date: date) -> dict:
             payouts += ret.total_refund
 
     total_sales = _q2(sum(by_mode.values(), Decimal("0")))
+    from expenses.models import Expense
+
+    expenses_total = (
+        Expense.objects.filter(tenant=tenant, date=target_date).aggregate(
+            t=Sum("amount")
+        )["t"]
+        or Decimal("0")
+    )
+    payouts_total = (
+        Payout.objects.filter(
+            tenant=tenant, created_at__date=target_date
+        ).aggregate(t=Sum("amount"))["t"]
+        or Decimal("0")
+    )
+    # "payouts" (legacy key) = cash refunds only; payouts_total = drawer payouts.
+    net_profit = _q2(total_sales - _q2(expenses_total) - _q2(payouts_total))
     top_items = list(
         BillLine.objects.filter(bill__in=bills)
         .values("product__sku", "product__name")
@@ -438,5 +567,8 @@ def day_summary(tenant, target_date: date) -> dict:
         "total_sales": str(total_sales),
         "by_mode": {k: str(v) for k, v in by_mode.items()},
         "payouts": str(_q2(payouts)),
+        "expenses_total": str(_q2(expenses_total)),
+        "payouts_total": str(_q2(payouts_total)),
+        "net_profit": str(net_profit),
         "top_items": top_items,
     }

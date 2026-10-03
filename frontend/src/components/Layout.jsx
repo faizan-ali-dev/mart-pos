@@ -12,6 +12,9 @@ const NAV = [
   { to: '/khata', label: 'Khata', urdu: 'کھاتہ', icon: '📒' },
   { to: '/wholesale', label: 'Wholesale', urdu: 'ہول سیل', icon: '🏭', manage: true },
   { to: '/shifts', label: 'Shifts', icon: '⏰' },
+  { to: '/expenses', label: 'Expenses', urdu: 'اخراجات', icon: '💸', manage: true },
+  { to: '/promotions', label: 'Promotions', urdu: 'آفرز', icon: '🎁', manage: true },
+  { to: '/reports', label: 'Reports', urdu: 'رپورٹس', icon: '📑', manage: true },
   { to: '/users', label: 'Users', icon: '👥', manage: true },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ];

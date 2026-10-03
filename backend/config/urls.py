@@ -21,4 +21,6 @@ urlpatterns = [
     path("api/", include("khata.urls")),
     path("api/", include("notifications.urls")),
     path("api/", include("reports.urls")),
+    path("api/", include("expenses.urls")),
+    path("api/", include("promotions.urls")),
 ]

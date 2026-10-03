@@ -32,7 +32,10 @@ Base URL comes from `VITE_API_URL` (default `http://localhost:8000`); every call
 - Khata: `/api/khata/customers/`, `/api/khata/suppliers/`, `/api/khata/ledger/` (`?customer=`), `/api/khata/payments/`, `/api/khata/aging/`
 - Users (owner/manager only): `/api/tenants/users/` (GET/POST), `/api/tenants/users/<id>/` (PATCH), `/api/tenants/users/<id>/reset-password/` (POST)
 - Notifications: `/api/notifications/templates/`, `/api/notifications/rules/`, `POST /api/notifications/send-test/`
-- Reports: `/api/reports/daily-summary/` (`?date=`), `/api/reports/wholesale-summary/` (`?date=`, `?customer=`)
+- Reports: `/api/reports/daily-summary/` (`?date=` — now also returns `expenses_total`, `payouts_total`, `net_profit`), `/api/reports/wholesale-summary/` (`?date=`, `?customer=`), `/api/reports/sales/` (`?from=&to=&search=&category=&sale_type=&payment_mode=&format=json|csv|xlsx`), `/api/reports/purchases/` (`?from=&to=&supplier=&search=&format=`), `/api/reports/profit/` (`?from=&to=` → `{sales_total, cogs_estimate, gross_profit, expenses_total, payouts_total, net_profit}`)
+- Expenses (owner/manager): `/api/expenses/categories/` (CRUD), `/api/expenses/expenses/` (CRUD `?from=&to=&category=`), `/api/expenses/summary/` (`?from=&to=` → `{total, by_category[]}`)
+- Payouts: `/api/billing/payouts/` (CRUD `{amount, purpose: supplier_payment|expense|other, supplier?, notes}` — auto-attaches to the open shift)
+- Promotions (owner/manager): `/api/promotions/promotions/` (CRUD `{name, promo_type: bogo|bundle|percent|flat, buy_product, buy_qty, get_product, get_qty, discount_percent, discount_amount, min_bill_amount, start_date, end_date, days_of_week[0-6 Mon..Sun], time_start, time_end, is_active}`); bill create response includes `applied_promotions[]`, free lines carry `is_free: true` (rate 0)
 - Wholesale: `/api/catalog/price-slabs/` (CRUD `{product, min_qty, discount_percent}`); customer objects carry `customer_type` (`retail`|`wholesale`) and `wholesale_discount_percent`; `POST /api/billing/bills/` accepts `sale_type` (`retail`|`wholesale`), and bill lines may include `applied_rate` / `slab_discount_percent`
 
 The UI is written defensively (DRF pagination `{results:[...]}` or plain arrays, tolerant field names) — see `src/api.js` `asList()`.
@@ -48,7 +51,10 @@ The UI is written defensively (DRF pagination `{results:[...]}` or plain arrays,
 | `/wholesale` | **Wholesale** (owner/manager only) — price slabs per product, wholesale customers, wholesale report (totals, by-customer, top items, margin estimate) |
 | `/inventory` | Products (+CSV import), stock levels, GRN, adjustments, alerts, categories |
 | `/khata` | Customers + ledger + record payment + printable statement, aging report, suppliers |
-| `/shifts` | Open/close shift with cash reconciliation, history |
+| `/shifts` | Open/close shift with cash reconciliation, history, **cash payouts** (record supplier/expense payouts, deducted from expected cash) |
+| `/expenses` | **Expenses** (owner/manager only) — expense records with date/category/mode filters, categories CRUD, summary cards |
+| `/promotions` | **Promotions** (owner/manager only) — BOGO, bundle, % / flat bill discounts with scheduling (dates, weekdays, time range), active toggle |
+| `/reports` | **Reports** (owner/manager only) — Sales / Purchases / Profit tabs, filters, **CSV + Excel export** |
 | `/users` | User management — roles (owner/manager/cashier), activate/deactivate, reset password. Hidden from cashiers (friendly 403) |
 | `/settings` | Shop profile, WhatsApp rules/templates/test, offline queue & cache |
 
@@ -67,7 +73,24 @@ Receipts render inside a `.print-area` div; `@media print` CSS shows only that a
 
 ## Roles
 
-`owner`/`manager` see everything. `cashier` sees Billing, Bills and Shifts only; `/users`, `/wholesale` and those nav items are hidden (direct visits get a friendly "Access restricted" card).
+`owner`/`manager` see everything. `cashier` sees Billing, Bills and Shifts only; `/users`, `/wholesale`, `/expenses`, `/promotions`, `/reports` and those nav items are hidden (direct visits get a friendly "Access restricted" card).
+
+## Weighing scale (billing)
+
+Cart lines for products with unit **kg / litre** show a **⚖ button** next to the qty. It uses the **Web Serial API** (`navigator.serial`): the cashier picks the scale's COM/USB port once, and the first numeric reading (9600 baud) is filled into qty. **Manual weight entry always works** as fallback — the qty field stays editable.
+
+Hardware requirements (documented for the billing PC):
+- A weighing scale with **serial (RS-232) or USB-serial output** (most commercial scales / "cashier scales" have this; check the scale prints or streams weight over COM port).
+- **Chrome or Edge** browser (Web Serial is Chromium-only; Firefox/Safari show a clear error and fall back to manual entry).
+- If the scale is unplugged or sends nothing within ~20s, the UI shows an error and the cashier types the weight manually.
+
+## Reports & exports
+
+Reports → Sales / Purchases / Profit tabs with date, search, category, supplier, sale-type and payment-mode filters. **Export CSV / Export Excel** buttons call the same endpoint with `?format=csv|xlsx`; the file downloads as a blob (`sales_YYYY-MM-DD.csv` etc., or the server's `Content-Disposition` filename when provided). Profit cards: sales, COGS estimate, gross profit, expenses, payouts, net profit — COGS uses each product's *current* weighted-average cost, so treat it as an estimate.
+
+## Promotions (display rules)
+
+Promotions are **never calculated in the frontend** — the backend applies them at bill creation (schedule-aware). After a bill is saved, the UI shows the response's `applied_promotions[]` as 🎁 chips, and lines with `is_free: true` render a green **FREE** badge on the receipt/invoice (rate 0).
 
 ## Wholesale pricing (display rules)
 

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Bill, BillLine, ParkedBill, Payment, Return, ReturnLine, Shift
+from .models import Bill, BillLine, ParkedBill, Payment, Payout, Return, ReturnLine, Shift
 
 
 class ShiftSerializer(serializers.ModelSerializer):
@@ -56,6 +56,7 @@ class BillLineSerializer(serializers.ModelSerializer):
             "discount_percent",
             "discount_amount",
             "slab_discount_percent",
+            "is_free",
             "line_total",
         )
 
@@ -92,6 +93,7 @@ class BillSerializer(serializers.ModelSerializer):
             "tendered",
             "change_due",
             "notes",
+            "applied_promotions",
             "created_at",
             "lines",
             "payments",
@@ -193,4 +195,35 @@ class ReturnCreateSerializer(serializers.Serializer):
 
 class ShiftCloseSerializer(serializers.Serializer):
     counted_cash = serializers.DecimalField(max_digits=12, decimal_places=2)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class PayoutSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(
+        source="created_by.username", read_only=True
+    )
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+
+    class Meta:
+        model = Payout
+        fields = (
+            "id",
+            "tenant",
+            "shift",
+            "amount",
+            "purpose",
+            "supplier",
+            "supplier_name",
+            "notes",
+            "created_by",
+            "created_by_username",
+            "created_at",
+        )
+        read_only_fields = ("id", "tenant", "shift", "created_by", "created_at")
+
+
+class PayoutCreateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    purpose = serializers.ChoiceField(choices=Payout.PURPOSE_CHOICES)
+    supplier = serializers.IntegerField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, default="")

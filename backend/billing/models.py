@@ -77,6 +77,10 @@ class Bill(models.Model):
     tendered = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     change_due = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
+    applied_promotions = models.JSONField(
+        default=list,
+        help_text="[{id, name, type, description}] of promotions that fired on this bill",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -113,6 +117,10 @@ class BillLine(models.Model):
         help_text="Volume slab that applied to this line (informational; "
         "discount_percent already reflects the winning discount)",
     )
+    is_free = models.BooleanField(
+        default=False,
+        help_text="BOGO free line: rate 0, but stock is still deducted",
+    )
     line_total = models.DecimalField(max_digits=12, decimal_places=2)
 
     def __str__(self):
@@ -139,6 +147,51 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.mode} {self.amount} ({self.bill.bill_no})"
+
+
+class Payout(models.Model):
+    """
+    Cash taken OUT of the counter drawer mid-shift: supplier payments,
+    shop expenses paid from the till, etc. Reduces the shift's expected_cash.
+    """
+
+    PURPOSE_SUPPLIER_PAYMENT = "supplier_payment"
+    PURPOSE_EXPENSE = "expense"
+    PURPOSE_OTHER = "other"
+    PURPOSE_CHOICES = (
+        (PURPOSE_SUPPLIER_PAYMENT, "Supplier payment"),
+        (PURPOSE_EXPENSE, "Shop expense"),
+        (PURPOSE_OTHER, "Other"),
+    )
+
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="payouts"
+    )
+    shift = models.ForeignKey(
+        Shift, on_delete=models.PROTECT, related_name="payouts",
+        help_text="The open shift this payout is deducted from",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
+    supplier = models.ForeignKey(
+        "khata.Supplier",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="payouts",
+        help_text="Set for supplier_payment: also records a khata payment (FIFO)",
+    )
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="payouts"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Payout {self.amount} ({self.purpose})"
 
 
 class ParkedBill(models.Model):

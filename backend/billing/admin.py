@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from tenants.admin import TenantScopedAdmin
 
-from .models import Bill, BillLine, ParkedBill, Payment, Return, ReturnLine, Shift
+from .models import Bill, BillLine, ParkedBill, Payment, Payout, Return, ReturnLine, Shift
 
 
 @admin.register(Shift)
@@ -28,7 +28,7 @@ class BillLineInline(admin.TabularInline):
     extra = 0
     can_delete = False
     readonly_fields = ("product", "qty", "rate", "discount_percent", "discount_amount",
-                       "slab_discount_percent", "line_total")
+                       "slab_discount_percent", "is_free", "line_total")
 
 
 class PaymentInline(admin.TabularInline):
@@ -67,6 +67,7 @@ class BillAdmin(TenantScopedAdmin):
         "tendered",
         "change_due",
         "notes",
+        "applied_promotions",
         "created_at",
     )
 
@@ -96,3 +97,19 @@ class ParkedBillAdmin(TenantScopedAdmin):
     list_display = ("token", "tenant", "status", "created_by", "created_at")
     list_filter = ("tenant", "status")
     search_fields = ("token",)
+
+
+@admin.register(Payout)
+class PayoutAdmin(TenantScopedAdmin):
+    list_display = (
+        "id",
+        "tenant",
+        "shift",
+        "amount",
+        "purpose",
+        "supplier",
+        "created_by",
+        "created_at",
+    )
+    list_filter = ("tenant", "purpose")
+    search_fields = ("notes", "supplier__name")

@@ -54,6 +54,8 @@ export default function Billing() {
   const [busy, setBusy] = useState(false);
   const [saleType, setSaleType] = useState('retail');   // 'retail' | 'wholesale'
   const [slabs, setSlabs] = useState(null);             // {productId: [{min_qty, discount_percent}]}
+  const [scaleReading, setScaleReading] = useState(null); // cart line key currently reading from scale
+  const [appliedPromos, setAppliedPromos] = useState([]); // promotions applied on last bill
   const searchRef = useRef(null);
   const shop = getShopProfile();
 
@@ -158,6 +160,57 @@ export default function Billing() {
     setCart((c) => c.map((l) => (l.key === key ? { ...l, [field]: val } : l)));
   const removeLine = (key) => setCart((c) => c.filter((l) => l.key !== key));
 
+  // ---------- weighing scale (Web Serial) ----------
+  const isWeighable = (p) => ['kg', 'kgs', 'kilo', 'litre', 'liter', 'ltr', 'l'].includes(String(p?.unit || '').toLowerCase());
+
+  const readScale = async (key) => {
+    if (!('serial' in navigator)) {
+      setNotice({ type: 'error', msg: 'Is browser mein scale support nahi hai — Chrome/Edge use karein. Weight manually likhein.' });
+      return;
+    }
+    setScaleReading(key);
+    let port;
+    try {
+      port = await navigator.serial.requestPort(); // user picks the scale's COM/USB port
+      await port.open({ baudRate: 9600 });
+      const reader = port.readable.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let weight = null;
+      const deadline = Date.now() + 20000;
+      while (Date.now() < deadline && weight === null) {
+        const chunk = await Promise.race([
+          reader.read().then((r) => ({ ...r, timeout: false })),
+          new Promise((res) => setTimeout(() => res({ value: null, done: false, timeout: true }), 1000)),
+        ]);
+        if (chunk.timeout) continue;
+        if (chunk.value) {
+          buf += decoder.decode(chunk.value, { stream: true });
+          const m = buf.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+          if (m) { weight = parseFloat(m[0]); break; }
+        }
+        if (chunk.done) break;
+      }
+      reader.releaseLock();
+      try { await port.close(); } catch { /* ignore */ }
+      if (weight !== null && weight > 0) {
+        setQty(key, weight);
+        setNotice({ type: 'ok', msg: `⚖ Scale se weight: ${weight}` });
+      } else {
+        setNotice({ type: 'error', msg: 'Scale se weight nahi mila — qty manually likhein.' });
+      }
+    } catch (e) {
+      if (e && e.name === 'NotFoundError') {
+        // User cancelled the port picker — silent, manual entry stays available.
+      } else {
+        setNotice({ type: 'error', msg: `Scale error (${e?.message || e}) — qty manually likhein.` });
+      }
+      try { await port?.close(); } catch { /* ignore */ }
+    } finally {
+      setScaleReading(null);
+    }
+  };
+
   const subtotal = cart.reduce((s, l) => s + lineGross(l, saleType), 0);
   const linesDiscTotal = cart.reduce((s, l) => s + lineDisc(l, saleType, slabs), 0);
   const billDiscAmt = Number(billDisc.amount || 0) + (subtotal - linesDiscTotal) * (Number(billDisc.percent || 0) / 100);
@@ -212,6 +265,7 @@ export default function Billing() {
       slab_discount_percent: l.slab_discount_percent ?? 0,
       discount_amount: l.discount_amount || 0,
       total: l.total ?? l.line_total ?? 0,
+      is_free: l.is_free ?? l.isFree ?? false,
     })),
     subtotal: src.subtotal, bill_discount_amount: src.bill_discount_amount || src.discount_total,
     bill_discount_reason: src.bill_discount_reason, grand_total: src.grand_total ?? src.total,
@@ -234,6 +288,7 @@ export default function Billing() {
     try {
       const r = await api.post('/billing/bills/', payload);
       setPrintBill(toPrintableBill(r.data));
+      setAppliedPromos(asList(r.data?.applied_promotions || r.data?.promotions));
       resetSale(); loadProducts();
     } catch (e) {
       if (isNetworkError(e)) {
@@ -322,6 +377,15 @@ export default function Billing() {
           <span className="urdu-sub"> · ہول سیل</span>
         </div>
       )}
+      {appliedPromos.length > 0 && (
+        <div className="promo-chips">
+          <span className="dim small">Applied promotions:</span>
+          {appliedPromos.map((p, i) => (
+            <Badge key={i} tone="green">🎁 {typeof p === 'string' ? p : (p.name || p.title || `Promo #${p.id || i + 1}`)}</Badge>
+          ))}
+          <button className="btn icon small" onClick={() => setAppliedPromos([])} aria-label="Dismiss">✕</button>
+        </div>
+      )}
       <ErrorBox error={error} onRetry={loadProducts} />
 
       <div className="pos-grid">
@@ -362,7 +426,18 @@ export default function Billing() {
                         <button className="btn icon small" onClick={() => setQty(l.key, Number(l.qty) - 1)} disabled={Number(l.qty) <= 1}>−</button>
                         <input className="input qty" type="number" min="0.01" step="any" value={l.qty} onChange={(e) => setQty(l.key, e.target.value)} />
                         <button className="btn icon small" onClick={() => setQty(l.key, Number(l.qty) + 1)}>+</button>
+                        {isWeighable(l.product) && (
+                          <button
+                            className="btn icon small"
+                            title="Weighing scale se weight lein (⚖)"
+                            disabled={scaleReading === l.key}
+                            onClick={() => readScale(l.key)}
+                          >
+                            {scaleReading === l.key ? '…' : '⚖'}
+                          </button>
+                        )}
                       </div>
+                      {isWeighable(l.product) && <div className="dim small">{l.product.unit} item — scale ya manual</div>}
                     </td>
                     <td>
                       <div>{fmtRs(rateOf(l.product, saleType))}</div>

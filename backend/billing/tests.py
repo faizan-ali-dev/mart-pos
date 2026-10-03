@@ -214,15 +214,21 @@ class ShiftCloseTests(POSTestCase):
             },
             format="json",
         )
+        # cash payout from the drawer reduces the expected cash
+        client.post(
+            "/api/billing/payouts/",
+            {"amount": "100.00", "purpose": "other", "notes": "test payout"},
+            format="json",
+        )
         resp = client.post(
             f"/api/billing/shifts/{self.shift.id}/close/",
-            {"counted_cash": "1250.00"},
+            {"counted_cash": "1150.00"},
             format="json",
         )
         self.assertEqual(resp.status_code, 200, resp.content)
         data = resp.json()
-        # opening 1000 + cash sales 200 = 1200 expected; counted 1250 -> +50
-        self.assertEqual(data["expected_cash"], "1200.00")
+        # opening 1000 + cash sales 200 - payout 100 = 1100 expected; counted 1150 -> +50
+        self.assertEqual(data["expected_cash"], "1100.00")
         self.assertEqual(data["difference"], "50.00")
         self.assertEqual(data["status"], "closed")
 

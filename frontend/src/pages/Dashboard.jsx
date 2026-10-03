@@ -6,6 +6,7 @@ export default function Dashboard() {
   const [date, setDate] = useState(todayISO());
   const [summary, setSummary] = useState(null);
   const [wsSummary, setWsSummary] = useState(null);
+  const [profit, setProfit] = useState(null);
   const [alerts, setAlerts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -14,14 +15,16 @@ export default function Dashboard() {
     setLoading(true);
     setError('');
     try {
-      const [s, a, w] = await Promise.all([
+      const [s, a, w, p] = await Promise.all([
         api.get('/reports/daily-summary/', { params: { date } }),
         api.get('/inventory/alerts/'),
         api.get('/reports/wholesale-summary/', { params: { date } }).catch(() => ({ data: null })),
+        api.get('/reports/profit/', { params: { from: date, to: date } }).catch(() => ({ data: null })),
       ]);
       setSummary(s.data);
       setAlerts(a.data);
       setWsSummary(w.data);
+      setProfit(p.data);
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -40,6 +43,11 @@ export default function Dashboard() {
   const wsTotal = Number(wsSummary?.total_sales ?? wsSummary?.total ?? 0);
   const dayTotal = Number(s.total_sales ?? s.total ?? 0);
   const retailTotal = Math.max(0, dayTotal - wsTotal);
+
+  // Net profit: prefer backend-computed net_profit (daily-summary or profit endpoint), else sales − expenses − payouts.
+  const expTotal = Number(s.expenses_total ?? profit?.expenses_total ?? 0);
+  const payTotal = Number(s.payouts_total ?? profit?.payouts_total ?? 0);
+  const netProfit = s.net_profit ?? profit?.net_profit ?? (dayTotal - expTotal - payTotal);
 
   const kpis = [
     { label: "Today's Sales", urdu: 'آج کی سیل', value: fmtRs(dayTotal), tone: 'green' },
@@ -60,6 +68,11 @@ export default function Dashboard() {
       <ErrorBox error={error} onRetry={load} />
       {loading ? <Spinner label="Loading dashboard…" /> : (
         <>
+          <div className="card hero-profit">
+            <div className="hero-label">Net profit today <span className="urdu-sub">خالص منافع</span> <span className="dim">{date}</span></div>
+            <div className={`hero-value ${Number(netProfit) < 0 ? 't-red' : 't-green'}`}>{fmtRs(netProfit)}</div>
+            <div className="hero-break">{fmtRs(dayTotal)} sales − {fmtRs(expTotal)} expenses − {fmtRs(payTotal)} payouts</div>
+          </div>
           <div className="kpi-grid">
             {kpis.map((k) => (
               <div className="card kpi" key={k.label}>
